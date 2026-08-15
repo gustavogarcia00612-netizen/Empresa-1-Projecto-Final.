@@ -1,5 +1,5 @@
 # Empresa-1-Projecto-Final.
-Nosotros Quisqueya Network Solutions somos la empresa#1 y este es nuestro projecto final de Conmutación y Enrutamiento. 
+Nosotros Quisqueya Network Solutions somos la empresa-1 y este es nuestro projecto final de Conmutación y Enrutamiento. 
 Nuestra empresa está formada por:
 - Ramón Emilio García Vargas 2025-0174 -
 - Gustavo  Gabriel García del Rosario 2025-0400 -

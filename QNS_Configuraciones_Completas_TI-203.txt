@@ -1,0 +1,1633 @@
+==============================================================================
+QUISQUEYA NETWORK SOLUTIONS (QNS) - TI-203 - CONSOLIDADO DE COMANDOS
+==============================================================================
+Instituto Tecnológico de las Américas (ITLA)
+Proyecto Final de Conmutación y Enrutamiento
+Profesor: Onel Luis Pelegrino
+Fecha: Agosto 2026
+
+Integrantes:
+- Ramón Emilio García Vargas - 2025-0174
+- Gustavo Gabriel García del Rosario - 2025-0400
+- Wilmer Jared Toval Garcia - 2025-0669
+- Bernis Gabriel Beltre Guillen - 2025-1445
+- Andy Ezequiel De la Cruz Ramirez - 2025-0768
+- Aaron Alexis Hernandez Méndez - 2025-0800
+
+NOTAS:
+- Archivo consolidado del estado final funcional del laboratorio QNS en PNETLab.
+- Bloque privado: 10.0.0.0/8. Bloque público académico: 1.0.0.0/24.
+- Las credenciales visibles son únicamente de laboratorio.
+- La PSK exacta de IPSec se deja como <CLAVE_VPN_DEL_LAB> para no inventarla.
+
+==============================================================================
+0. DIRECCIONAMIENTO FINAL
+==============================================================================
+SANTO DOMINGO
+VLAN10 ATENCION_CLIENTE   10.0.0.0/24      VIP 10.0.0.1
+VLAN20 ADMINISTRACION     10.0.2.0/25      VIP 10.0.2.1
+VLAN30 VENTAS             10.0.1.128/25    VIP 10.0.1.129
+VLAN40 OPERACIONES        10.0.1.0/25      VIP 10.0.1.1
+VLAN99 GESTION            10.0.2.128/28    VIP 10.0.2.129
+R-SD-R-SW1                10.0.2.144/30
+R-SD-R-SW2                10.0.2.148/30
+
+SANTIAGO
+VLAN50 CENTRO_DATOS       10.0.4.32/27     GW 10.0.4.33
+VLAN60 VENTAS             10.0.4.0/27      GW 10.0.4.1
+VLAN70 ADMINISTRACION     10.0.4.64/28     GW 10.0.4.65
+VLAN99 GESTION            10.0.4.80/28     GW 10.0.4.81
+R-STGO-SW6                10.0.4.96/30
+QNS-SERVER                10.0.4.34/27
+
+SUCURSALES
+PUERTO PLATA              10.0.6.0/27      GW 10.0.6.1
+LA ROMANA                 10.0.6.32/27     GW 10.0.6.33
+BARAHONA                  10.0.6.64/27     GW 10.0.6.65
+
+ENLACES PUBLICOS
+ISP-R-SD      1.0.0.0/30     ISP .1   R-SD .2
+ISP-R-STGO    1.0.0.4/30     ISP .5   R-STGO .6
+ISP-R-ROM     1.0.0.8/30     ISP .9   R-ROM .10
+ISP-R-POP     1.0.0.12/30    ISP .13  R-POP .14
+ISP-R-BAR     1.0.0.16/30    ISP .17  R-BAR .18
+
+==============================================================================
+1. ISP
+==============================================================================
+enable
+configure terminal
+hostname ISP
+no ip domain-lookup
+
+interface Ethernet0/0
+ description ENLACE-A-R-SD
+ ip address 1.0.0.1 255.255.255.252
+ ip nat inside
+ no shutdown
+exit
+interface Ethernet0/2
+ description ENLACE-A-R-STGO
+ ip address 1.0.0.5 255.255.255.252
+ ip nat inside
+ no shutdown
+exit
+interface Ethernet0/3
+ description ENLACE-A-R-ROM
+ ip address 1.0.0.9 255.255.255.252
+ ip nat inside
+ no shutdown
+exit
+interface Ethernet1/0
+ description ENLACE-A-R-POP
+ ip address 1.0.0.13 255.255.255.252
+ ip nat inside
+ no shutdown
+exit
+interface Ethernet1/1
+ description ENLACE-A-R-BAR
+ ip address 1.0.0.17 255.255.255.252
+ ip nat inside
+ no shutdown
+exit
+interface Ethernet1/2
+ description CLOUD-NAT-INTERNET
+ ip address dhcp
+ ip nat outside
+ no shutdown
+exit
+
+ip route 10.0.0.0 255.255.252.0 1.0.0.2
+ip route 10.0.4.0 255.255.255.224 1.0.0.6
+ip route 10.0.4.32 255.255.255.224 1.0.0.6
+ip route 10.0.4.64 255.255.255.240 1.0.0.6
+ip route 10.0.4.80 255.255.255.240 1.0.0.6
+ip route 10.0.6.0 255.255.255.224 1.0.0.14
+ip route 10.0.6.32 255.255.255.224 1.0.0.10
+ip route 10.0.6.64 255.255.255.224 1.0.0.18
+ip route 0.0.0.0 0.0.0.0 dhcp
+
+ip access-list standard NAT-PUBLICAS
+ permit 10.0.0.0 0.255.255.255
+exit
+ip nat inside source list NAT-PUBLICAS interface Ethernet1/2 overload
+end
+write memory
+
+show ip interface brief
+show ip route
+show ip nat statistics
+show ip nat translations
+ping 10.0.137.1
+ping 8.8.8.8
+
+==============================================================================
+2. R-SD - SANTO DOMINGO
+==============================================================================
+enable
+configure terminal
+hostname R-SD
+no ip domain-lookup
+
+interface Ethernet0/0
+ description ENLACE-PUBLICO-A-ISP
+ ip address 1.0.0.2 255.255.255.252
+ ip nat outside
+ no shutdown
+exit
+interface Ethernet0/1
+ description ENLACE-INTERNO-A-R-SW1
+ ip address 10.0.2.145 255.255.255.252
+ ip nat inside
+ no shutdown
+exit
+interface Ethernet0/2
+ description ENLACE-INTERNO-A-R-SW2
+ ip address 10.0.2.149 255.255.255.252
+ ip nat inside
+ no shutdown
+exit
+
+ip route 0.0.0.0 0.0.0.0 1.0.0.1
+
+router ospf 1
+ router-id 10.255.10.254
+ passive-interface default
+ no passive-interface Ethernet0/1
+ no passive-interface Ethernet0/2
+ network 10.0.0.0 0.0.3.255 area 10
+ default-information originate
+exit
+
+ip access-list standard NAT-SANTO-DOMINGO
+ permit 10.0.0.0 0.0.3.255
+exit
+ip access-list extended NAT-SD-INTERNET
+ deny ip 10.0.0.0 0.0.3.255 10.0.0.0 0.255.255.255
+ permit ip 10.0.0.0 0.0.3.255 any
+exit
+route-map NAT-SD-RM permit 10
+ match ip address NAT-SD-INTERNET
+exit
+ip nat inside source route-map NAT-SD-RM interface Ethernet0/0 overload
+
+ip access-list extended VPN-SD-STGO
+ permit ip 10.0.0.0 0.0.3.255 10.0.4.0 0.0.0.127
+exit
+
+ip domain-name qns.com.do
+username qnsadmin privilege 15 secret QNS-Admin-2026!
+crypto key generate rsa modulus 2048
+ip ssh version 2
+aaa new-model
+radius-server host 10.0.4.34 auth-port 1812 acct-port 1813 key QNS-RADIUS-2026!
+aaa authentication login QNS-RADIUS group radius local
+line vty 0 4
+ login authentication QNS-RADIUS
+ transport input ssh
+ exec-timeout 10 0
+exit
+end
+write memory
+
+show ip interface brief
+show ip protocols
+show ip ospf neighbor
+show ip route ospf
+show access-lists
+show ip nat statistics
+show ip nat translations
+show ip ssh
+test aaa group radius soporte-red QNS-Soporte-2026! legacy
+ping 1.0.0.1
+ping 8.8.8.8
+
+==============================================================================
+3. VPN IPSEC - R-SD <-> R-STGO
+==============================================================================
+! R-SD
+configure terminal
+crypto isakmp policy 10
+ encr aes 256
+ hash sha
+ authentication pre-share
+ group 5
+ lifetime 86400
+exit
+crypto isakmp key <CLAVE_VPN_DEL_LAB> address 1.0.0.6
+crypto ipsec transform-set QNS-SET esp-aes 256 esp-sha-hmac
+ mode tunnel
+exit
+crypto map QNS-VPN 10 ipsec-isakmp
+ set peer 1.0.0.6
+ set transform-set QNS-SET
+ match address VPN-SD-STGO
+exit
+interface Ethernet0/0
+ crypto map QNS-VPN
+exit
+end
+write memory
+
+! R-STGO
+configure terminal
+crypto isakmp policy 10
+ encr aes 256
+ hash sha
+ authentication pre-share
+ group 5
+ lifetime 86400
+exit
+crypto isakmp key <CLAVE_VPN_DEL_LAB> address 1.0.0.2
+crypto ipsec transform-set QNS-SET esp-aes 256 esp-sha-hmac
+ mode tunnel
+exit
+ip access-list extended VPN-SD-STGO
+ permit ip 10.0.4.0 0.0.0.127 10.0.0.0 0.0.3.255
+exit
+crypto map QNS-VPN 10 ipsec-isakmp
+ set peer 1.0.0.2
+ set transform-set QNS-SET
+ match address VPN-SD-STGO
+exit
+interface Ethernet0/0
+ crypto map QNS-VPN
+exit
+end
+write memory
+
+show crypto isakmp sa
+show crypto ipsec sa
+show crypto map
+
+==============================================================================
+4. R-SW1 - DISTRIBUCION SD
+==============================================================================
+enable
+configure terminal
+hostname R-SW1
+no ip domain-lookup
+ip routing
+ip cef
+spanning-tree mode rapid-pvst
+vlan 10
+ name ATENCION_CLIENTE
+vlan 20
+ name ADMINISTRACION
+vlan 30
+ name VENTAS
+vlan 40
+ name OPERACIONES
+vlan 99
+ name GESTION
+vlan 999
+ name NATIVA_NO_USADA
+exit
+
+interface Ethernet0/0
+ no switchport
+ description ENLACE-A-R-SD
+ ip address 10.0.2.146 255.255.255.252
+ no shutdown
+exit
+
+interface Vlan10
+ description GW-ATENCION-CLIENTE
+ ip address 10.0.0.2 255.255.255.0
+ standby 10 ip 10.0.0.1
+ standby 10 priority 110
+ standby 10 preempt
+ ip ospf cost 10
+ no shutdown
+exit
+interface Vlan20
+ description GW-ADMINISTRACION
+ ip address 10.0.2.2 255.255.255.128
+ standby 20 ip 10.0.2.1
+ standby 20 priority 110
+ standby 20 preempt
+ ip ospf cost 10
+ no shutdown
+exit
+interface Vlan30
+ description GW-VENTAS
+ ip address 10.0.1.130 255.255.255.128
+ standby 30 ip 10.0.1.129
+ standby 30 priority 100
+ standby 30 preempt
+ ip ospf cost 100
+ no shutdown
+exit
+interface Vlan40
+ description GW-OPERACIONES
+ ip address 10.0.1.2 255.255.255.128
+ standby 40 ip 10.0.1.1
+ standby 40 priority 100
+ standby 40 preempt
+ ip ospf cost 100
+ no shutdown
+exit
+interface Vlan99
+ description GESTION
+ ip address 10.0.2.130 255.255.255.240
+ standby 99 ip 10.0.2.129
+ standby 99 priority 100
+ standby 99 preempt
+ ip ospf cost 100
+ no shutdown
+exit
+
+interface range Ethernet0/1 - 3
+ description ETHERCHANNEL-A-R-SW2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99,999
+ channel-group 1 mode active
+ no shutdown
+exit
+interface Port-channel1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99,999
+exit
+interface range Ethernet1/0 - 2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99,999
+ no shutdown
+exit
+
+spanning-tree vlan 10,20 priority 24576
+spanning-tree vlan 30,40,99,999 priority 28672
+
+router ospf 1
+ router-id 10.255.10.1
+ passive-interface default
+ no passive-interface Ethernet0/0
+ network 10.0.0.0 0.0.3.255 area 10
+exit
+
+ip dhcp excluded-address 10.0.0.1 10.0.0.20
+ip dhcp excluded-address 10.0.2.1 10.0.2.20
+ip dhcp pool SD_VLAN10_ATENCION
+ network 10.0.0.0 255.255.255.0
+ default-router 10.0.0.1
+ dns-server 10.0.4.34 8.8.8.8
+ domain-name qns.com.do
+exit
+ip dhcp pool SD_VLAN20_ADMINISTRACION
+ network 10.0.2.0 255.255.255.128
+ default-router 10.0.2.1
+ dns-server 10.0.4.34 8.8.8.8
+ domain-name qns.com.do
+exit
+end
+write memory
+
+show standby brief
+show etherchannel summary
+show interfaces trunk
+show spanning-tree root
+show ip ospf neighbor
+show ip route ospf
+show ip dhcp binding
+show ip dhcp pool
+show ip cef summary
+
+==============================================================================
+5. R-SW2 - DISTRIBUCION SD
+==============================================================================
+enable
+configure terminal
+hostname R-SW2
+no ip domain-lookup
+ip routing
+ip cef
+spanning-tree mode rapid-pvst
+vlan 10
+ name ATENCION_CLIENTE
+vlan 20
+ name ADMINISTRACION
+vlan 30
+ name VENTAS
+vlan 40
+ name OPERACIONES
+vlan 99
+ name GESTION
+vlan 999
+ name NATIVA_NO_USADA
+exit
+
+interface Ethernet0/0
+ no switchport
+ description ENLACE-A-R-SD
+ ip address 10.0.2.150 255.255.255.252
+ no shutdown
+exit
+
+interface Vlan10
+ ip address 10.0.0.3 255.255.255.0
+ standby 10 ip 10.0.0.1
+ standby 10 priority 100
+ standby 10 preempt
+ ip ospf cost 100
+ no shutdown
+exit
+interface Vlan20
+ ip address 10.0.2.3 255.255.255.128
+ standby 20 ip 10.0.2.1
+ standby 20 priority 100
+ standby 20 preempt
+ ip ospf cost 100
+ no shutdown
+exit
+interface Vlan30
+ ip address 10.0.1.131 255.255.255.128
+ standby 30 ip 10.0.1.129
+ standby 30 priority 110
+ standby 30 preempt
+ ip ospf cost 10
+ no shutdown
+exit
+interface Vlan40
+ ip address 10.0.1.3 255.255.255.128
+ standby 40 ip 10.0.1.1
+ standby 40 priority 110
+ standby 40 preempt
+ ip ospf cost 10
+ no shutdown
+exit
+interface Vlan99
+ ip address 10.0.2.131 255.255.255.240
+ standby 99 ip 10.0.2.129
+ standby 99 priority 110
+ standby 99 preempt
+ ip ospf cost 10
+ no shutdown
+exit
+
+interface range Ethernet0/1 - 3
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99,999
+ channel-group 1 mode active
+ no shutdown
+exit
+interface Port-channel1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99,999
+exit
+interface range Ethernet1/0 - 2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99,999
+ no shutdown
+exit
+
+spanning-tree vlan 30,40,99,999 priority 24576
+spanning-tree vlan 10,20 priority 28672
+
+router ospf 1
+ router-id 10.255.10.2
+ passive-interface default
+ no passive-interface Ethernet0/0
+ network 10.0.0.0 0.0.3.255 area 10
+exit
+
+ip dhcp excluded-address 10.0.1.129 10.0.1.140
+ip dhcp excluded-address 10.0.1.1 10.0.1.20
+ip dhcp pool SD_VLAN30_VENTAS
+ network 10.0.1.128 255.255.255.128
+ default-router 10.0.1.129
+ dns-server 10.0.4.34 8.8.8.8
+ domain-name qns.com.do
+exit
+ip dhcp pool SD_VLAN40_OPERACIONES
+ network 10.0.1.0 255.255.255.128
+ default-router 10.0.1.1
+ dns-server 10.0.4.34 8.8.8.8
+ domain-name qns.com.do
+exit
+end
+write memory
+
+show standby brief
+show etherchannel summary
+show interfaces trunk
+show spanning-tree root
+show ip ospf neighbor
+show ip route ospf
+show ip dhcp binding
+show ip dhcp pool
+show ip cef summary
+
+==============================================================================
+6. SW3 - ACCESO SD
+==============================================================================
+enable
+configure terminal
+hostname SW3
+spanning-tree mode rapid-pvst
+vlan 10
+ name ATENCION_CLIENTE
+vlan 20
+ name ADMINISTRACION
+vlan 30
+ name VENTAS
+vlan 40
+ name OPERACIONES
+vlan 99
+ name GESTION
+vlan 999
+ name NATIVA_NO_USADA
+exit
+interface Ethernet0/0
+ description TRUNK-A-DISTRIBUCION-1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99,999
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet0/1
+ description TRUNK-A-DISTRIBUCION-2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99,999
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet0/2
+ description PC-SD-ATENCION-CLIENTE
+ switchport mode access
+ switchport access vlan 10
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ ip dhcp snooping limit rate 15
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+interface Vlan99
+ description GESTION-SW3
+ ip address 10.0.2.132 255.255.255.240
+ no shutdown
+exit
+ip default-gateway 10.0.2.129
+ip dhcp snooping
+ip dhcp snooping vlan 10,20,30,40
+no ip dhcp snooping information option
+ip arp inspection vlan 10,20,30,40
+end
+write memory
+
+show vlan brief
+show interfaces trunk
+show port-security
+show ip dhcp snooping
+show ip dhcp snooping binding
+show ip arp inspection
+show spanning-tree summary
+show spanning-tree blockedports
+
+! Segundo puerto de usuario de SW3:
+configure terminal
+interface Ethernet0/3
+ description PC-SD-ADMINISTRACION
+ switchport mode access
+ switchport access vlan 20
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ ip dhcp snooping limit rate 15
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+end
+write memory
+
+==============================================================================
+7. SW4 - ACCESO SD
+==============================================================================
+enable
+configure terminal
+hostname SW4
+spanning-tree mode rapid-pvst
+vlan 10
+ name ATENCION_CLIENTE
+vlan 20
+ name ADMINISTRACION
+vlan 30
+ name VENTAS
+vlan 40
+ name OPERACIONES
+vlan 99
+ name GESTION
+vlan 999
+ name NATIVA_NO_USADA
+exit
+interface Ethernet0/0
+ description TRUNK-A-DISTRIBUCION-1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99,999
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet0/1
+ description TRUNK-A-DISTRIBUCION-2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99,999
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet0/2
+ description PC-SD-VENTAS
+ switchport mode access
+ switchport access vlan 30
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ ip dhcp snooping limit rate 15
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+interface Vlan99
+ description GESTION-SW4
+ ip address 10.0.2.133 255.255.255.240
+ no shutdown
+exit
+ip default-gateway 10.0.2.129
+ip dhcp snooping
+ip dhcp snooping vlan 10,20,30,40
+no ip dhcp snooping information option
+ip arp inspection vlan 10,20,30,40
+end
+write memory
+
+show vlan brief
+show interfaces trunk
+show port-security
+show ip dhcp snooping
+show ip dhcp snooping binding
+show ip arp inspection
+show spanning-tree summary
+show spanning-tree blockedports
+
+configure terminal
+interface Ethernet0/3
+ description PUERTO-NO-USADO
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+exit
+end
+write memory
+
+==============================================================================
+8. SW5 - ACCESO SD
+==============================================================================
+enable
+configure terminal
+hostname SW5
+spanning-tree mode rapid-pvst
+vlan 10
+ name ATENCION_CLIENTE
+vlan 20
+ name ADMINISTRACION
+vlan 30
+ name VENTAS
+vlan 40
+ name OPERACIONES
+vlan 99
+ name GESTION
+vlan 999
+ name NATIVA_NO_USADA
+exit
+interface Ethernet0/0
+ description TRUNK-A-DISTRIBUCION-1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99,999
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet0/1
+ description TRUNK-A-DISTRIBUCION-2
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 10,20,30,40,99,999
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet0/2
+ description PC-SD-OPERACIONES
+ switchport mode access
+ switchport access vlan 40
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ ip dhcp snooping limit rate 15
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+interface Vlan99
+ description GESTION-SW5
+ ip address 10.0.2.134 255.255.255.240
+ no shutdown
+exit
+ip default-gateway 10.0.2.129
+ip dhcp snooping
+ip dhcp snooping vlan 10,20,30,40
+no ip dhcp snooping information option
+ip arp inspection vlan 10,20,30,40
+end
+write memory
+
+show vlan brief
+show interfaces trunk
+show port-security
+show ip dhcp snooping
+show ip dhcp snooping binding
+show ip arp inspection
+show spanning-tree summary
+show spanning-tree blockedports
+
+configure terminal
+interface Ethernet0/3
+ description PUERTO-NO-USADO
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+exit
+end
+write memory
+
+==============================================================================
+9. R-STGO - SANTIAGO
+==============================================================================
+enable
+configure terminal
+hostname R-STGO
+no ip domain-lookup
+interface Ethernet0/0
+ description ENLACE-PUBLICO-A-ISP
+ ip address 1.0.0.6 255.255.255.252
+ ip nat outside
+ no shutdown
+exit
+interface Ethernet0/1
+ description ENLACE-INTERNO-A-SW6
+ ip address 10.0.4.97 255.255.255.252
+ ip nat inside
+ ip virtual-reassembly in
+ ip tcp adjust-mss 1200
+ no shutdown
+exit
+ip route 0.0.0.0 0.0.0.0 1.0.0.5
+router ospf 1
+ router-id 10.255.20.254
+ passive-interface default
+ no passive-interface Ethernet0/1
+ network 10.0.4.96 0.0.0.3 area 20
+ default-information originate
+exit
+ip access-list standard NAT-SANTIAGO
+ permit 10.0.4.0 0.0.0.127
+exit
+ip access-list extended NAT-SANTIAGO-INTERNET
+ deny ip 10.0.4.0 0.0.0.127 1.0.0.0 0.0.0.31
+ deny ip 10.0.4.0 0.0.0.127 10.0.0.0 0.255.255.255
+ permit ip 10.0.4.0 0.0.0.127 any
+exit
+route-map NAT-SANTIAGO-RM permit 10
+ match ip address NAT-SANTIAGO-INTERNET
+exit
+ip nat inside source route-map NAT-SANTIAGO-RM interface Ethernet0/0 overload
+end
+write memory
+
+show ip interface brief
+show ip protocols
+show ip ospf neighbor
+show ip route ospf
+show access-lists
+show ip nat statistics
+show ip nat translations
+ping 1.0.0.5
+ping 8.8.8.8
+
+==============================================================================
+10. SW6 - MULTICAPA SANTIAGO
+==============================================================================
+enable
+configure terminal
+hostname SW6
+ip routing
+ip cef
+spanning-tree mode rapid-pvst
+vlan 50
+ name CENTRO_DATOS
+vlan 60
+ name VENTAS
+vlan 70
+ name ADMINISTRACION
+vlan 99
+ name GESTION
+vlan 999
+ name NATIVA_NO_USADA
+exit
+interface Ethernet0/0
+ no switchport
+ description ENLACE-A-R-STGO
+ ip address 10.0.4.98 255.255.255.252
+ no shutdown
+exit
+interface Vlan50
+ description GW-CENTRO-DATOS
+ ip address 10.0.4.33 255.255.255.224
+ no shutdown
+exit
+interface Vlan60
+ description GW-VENTAS
+ ip address 10.0.4.1 255.255.255.224
+ ip helper-address 10.0.4.34
+ no shutdown
+exit
+interface Vlan70
+ description GW-ADMINISTRACION
+ ip address 10.0.4.65 255.255.255.240
+ ip helper-address 10.0.4.34
+ no shutdown
+exit
+interface Vlan99
+ description GESTION-SW6
+ ip address 10.0.4.81 255.255.255.240
+ no shutdown
+exit
+interface range Ethernet0/1 - 2
+ description ETHERCHANNEL-A-SW9
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 50,60,70,99,999
+ channel-group 1 mode active
+ no shutdown
+exit
+interface Port-channel1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 50,60,70,99,999
+exit
+spanning-tree vlan 50,60,70,99,999 priority 24576
+router ospf 1
+ router-id 10.255.20.1
+ passive-interface default
+ no passive-interface Ethernet0/0
+ network 10.0.4.0 0.0.0.127 area 20
+ network 10.0.4.96 0.0.0.3 area 20
+exit
+end
+write memory
+
+show ip interface brief
+show etherchannel summary
+show interfaces trunk
+show spanning-tree root
+show ip ospf neighbor
+show ip route ospf
+show ip cef summary
+
+==============================================================================
+11. SW9 - ACCESO SANTIAGO
+==============================================================================
+enable
+configure terminal
+hostname SW9
+spanning-tree mode rapid-pvst
+vlan 50
+ name CENTRO_DATOS
+vlan 60
+ name VENTAS
+vlan 70
+ name ADMINISTRACION
+vlan 99
+ name GESTION
+vlan 999
+ name NATIVA_NO_USADA
+exit
+
+interface range Ethernet0/0 - 1
+ description ETHERCHANNEL-A-SW6
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 50,60,70,99,999
+ channel-group 1 mode active
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Port-channel1
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 999
+ switchport trunk allowed vlan 50,60,70,99,999
+ ip dhcp snooping trust
+ ip arp inspection trust
+exit
+
+interface Ethernet0/2
+ description QNS-SERVER-CENTRO-DATOS
+ switchport mode access
+ switchport access vlan 50
+ ip dhcp snooping trust
+ ip arp inspection trust
+ spanning-tree portfast edge
+ no shutdown
+exit
+
+interface Ethernet0/3
+ description PUERTO-NO-USADO
+ switchport mode access
+ switchport access vlan 999
+ shutdown
+exit
+
+interface Ethernet1/0
+ description PC-STGO-VENTAS
+ switchport mode access
+ switchport access vlan 60
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ ip dhcp snooping limit rate 15
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+interface Ethernet1/1
+ description PC-STGO-ADMINISTRACION
+ switchport mode access
+ switchport access vlan 70
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ ip dhcp snooping limit rate 15
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+interface Ethernet1/2
+ description PC-GUI-STGO-CENTRO-DATOS
+ switchport mode access
+ switchport access vlan 50
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ ip dhcp snooping limit rate 15
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ no shutdown
+exit
+
+interface Vlan99
+ description GESTION-SW9
+ ip address 10.0.4.82 255.255.255.240
+ no shutdown
+exit
+ip default-gateway 10.0.4.81
+
+ip dhcp snooping
+ip dhcp snooping vlan 50,60,70
+no ip dhcp snooping information option
+ip arp inspection vlan 50,60,70
+end
+write memory
+
+show vlan brief
+show etherchannel summary
+show interfaces trunk
+show port-security
+show ip dhcp snooping
+show ip dhcp snooping binding
+show ip arp inspection
+show spanning-tree root
+
+==============================================================================
+12. R-POP - PUERTO PLATA
+==============================================================================
+enable
+configure terminal
+hostname R-POP
+no ip domain-lookup
+interface Ethernet0/0
+ description ENLACE-PUBLICO-A-ISP
+ ip address 1.0.0.14 255.255.255.252
+ no shutdown
+exit
+interface Ethernet0/1
+ description LAN-R-POP
+ ip address 10.0.6.1 255.255.255.224
+ no shutdown
+exit
+ip route 0.0.0.0 0.0.0.0 1.0.0.13
+ip dhcp excluded-address 10.0.6.1 10.0.6.10
+ip dhcp pool POP-USUARIOS
+ network 10.0.6.0 255.255.255.224
+ default-router 10.0.6.1
+ dns-server 10.0.4.34 8.8.8.8
+ domain-name qns.com.do
+exit
+end
+write memory
+show ip interface brief
+show ip route
+show ip dhcp binding
+show ip dhcp pool
+ping 10.0.4.34
+ping 8.8.8.8
+
+==============================================================================
+13. R-BAR - BARAHONA
+==============================================================================
+enable
+configure terminal
+hostname R-BAR
+no ip domain-lookup
+interface Ethernet0/0
+ description ENLACE-PUBLICO-A-ISP
+ ip address 1.0.0.18 255.255.255.252
+ no shutdown
+exit
+interface Ethernet0/1
+ description LAN-R-BAR
+ ip address 10.0.6.65 255.255.255.224
+ no shutdown
+exit
+ip route 0.0.0.0 0.0.0.0 1.0.0.17
+ip dhcp excluded-address 10.0.6.65 10.0.6.70
+ip dhcp pool BAR-USUARIOS
+ network 10.0.6.64 255.255.255.224
+ default-router 10.0.6.65
+ dns-server 10.0.4.34 8.8.8.8
+ domain-name qns.com.do
+exit
+end
+write memory
+show ip interface brief
+show ip route
+show ip dhcp binding
+show ip dhcp pool
+ping 10.0.4.34
+ping 8.8.8.8
+
+==============================================================================
+14. R-ROM - LA ROMANA
+==============================================================================
+enable
+configure terminal
+hostname R-ROM
+no ip domain-lookup
+interface Ethernet0/0
+ description ENLACE-PUBLICO-A-ISP
+ ip address 1.0.0.10 255.255.255.252
+ no shutdown
+exit
+interface Ethernet0/1
+ description LAN-R-ROM
+ ip address 10.0.6.33 255.255.255.224
+ no shutdown
+exit
+ip route 0.0.0.0 0.0.0.0 1.0.0.9
+ip dhcp excluded-address 10.0.6.33 10.0.6.43
+ip dhcp pool ROM-USUARIOS
+ network 10.0.6.32 255.255.255.224
+ default-router 10.0.6.33
+ dns-server 10.0.4.34 8.8.8.8
+ domain-name qns.com.do
+exit
+end
+write memory
+show ip interface brief
+show ip route
+show ip dhcp binding
+show ip dhcp pool
+ping 10.0.4.34
+ping 8.8.8.8
+
+==============================================================================
+15. SW-POP
+==============================================================================
+enable
+configure terminal
+hostname SW-POP
+spanning-tree mode rapid-pvst
+ip dhcp snooping
+ip dhcp snooping vlan 1
+no ip dhcp snooping information option
+ip arp inspection vlan 1
+interface Ethernet0/0
+ description UPLINK-R-POP
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet0/2
+ description PC-POP
+ switchport mode access
+ switchport access vlan 1
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ ip dhcp snooping limit rate 15
+ no shutdown
+exit
+end
+write memory
+show interfaces status
+show mac address-table dynamic
+show port-security interface Ethernet0/2
+show ip dhcp snooping
+show ip dhcp snooping binding
+show ip arp inspection
+
+==============================================================================
+16. SW-BAR
+==============================================================================
+enable
+configure terminal
+hostname SW-BAR
+spanning-tree mode rapid-pvst
+ip dhcp snooping
+ip dhcp snooping vlan 1
+no ip dhcp snooping information option
+ip arp inspection vlan 1
+interface Ethernet0/0
+ description UPLINK-R-BAR
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet0/2
+ description PC-BAR
+ switchport mode access
+ switchport access vlan 1
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ ip dhcp snooping limit rate 15
+ no shutdown
+exit
+end
+write memory
+show interfaces status
+show mac address-table dynamic
+show port-security interface Ethernet0/2
+show ip dhcp snooping
+show ip dhcp snooping binding
+show ip arp inspection
+
+==============================================================================
+17. SW7 - LA ROMANA
+==============================================================================
+enable
+configure terminal
+hostname SW7
+spanning-tree mode rapid-pvst
+ip dhcp snooping
+ip dhcp snooping vlan 1
+no ip dhcp snooping information option
+ip arp inspection vlan 1
+interface Ethernet0/0
+ description UPLINK-R-ROM
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet0/1
+ description ENLACE-SW8-1
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet0/2
+ description ENLACE-SW8-2
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet0/3
+ description ENLACE-SW8-3
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet1/0
+ description PC-ROM-D1
+ switchport mode access
+ switchport access vlan 1
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ ip dhcp snooping limit rate 15
+ no shutdown
+exit
+end
+write memory
+show mac address-table dynamic
+show spanning-tree vlan 1
+show port-security
+show ip dhcp snooping binding
+show ip arp inspection
+
+==============================================================================
+18. SW8 - LA ROMANA
+==============================================================================
+enable
+configure terminal
+hostname SW8
+spanning-tree mode rapid-pvst
+ip dhcp snooping
+ip dhcp snooping vlan 1
+no ip dhcp snooping information option
+ip arp inspection vlan 1
+interface Ethernet0/0
+ description ENLACE-SW7-1
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet0/1
+ description ENLACE-SW7-2
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet0/2
+ description ENLACE-SW7-3
+ ip dhcp snooping trust
+ ip arp inspection trust
+ no shutdown
+exit
+interface Ethernet0/3
+ description PC-ROM-D2
+ switchport mode access
+ switchport access vlan 1
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ ip dhcp snooping limit rate 15
+ no shutdown
+exit
+interface Ethernet1/1
+ description PC-ROM-D3
+ switchport mode access
+ switchport access vlan 1
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security mac-address sticky
+ switchport port-security violation restrict
+ ip dhcp snooping limit rate 15
+ no shutdown
+exit
+end
+write memory
+show mac address-table dynamic
+show spanning-tree vlan 1
+show port-security
+show ip dhcp snooping binding
+show ip arp inspection
+
+==============================================================================
+19. QNS-SERVER - RED LINUX
+==============================================================================
+echo "QNS-SERVER" > /etc/hostname
+hostname QNS-SERVER
+ip link set eth1 up
+ip addr flush dev eth1 scope global
+ip addr add 10.0.4.34/27 dev eth1
+ip route replace default via 10.0.4.33 dev eth1 mtu 1000 advmss 900
+ip route replace 10.0.0.0/8 via 10.0.4.33 dev eth1
+printf 'nameserver 127.0.0.1
+' > /etc/resolv.conf
+
+ip -4 addr show eth1
+ip route
+ping -c 3 10.0.4.33
+ping -c 3 8.8.8.8
+getent hosts www.qns.com.do
+
+==============================================================================
+20. DHCP EN QNS-SERVER
+==============================================================================
+cat > /etc/dhcp/dhcpd.conf <<'EOF'
+authoritative;
+default-lease-time 3600;
+max-lease-time 7200;
+option domain-name "qns.com.do";
+option domain-name-servers 10.0.4.34, 8.8.8.8;
+
+subnet 10.0.4.0 netmask 255.255.255.224 {
+ range 10.0.4.10 10.0.4.30;
+ option routers 10.0.4.1;
+ option broadcast-address 10.0.4.31;
+}
+subnet 10.0.4.32 netmask 255.255.255.224 {
+ range 10.0.4.40 10.0.4.62;
+ option routers 10.0.4.33;
+ option broadcast-address 10.0.4.63;
+}
+subnet 10.0.4.64 netmask 255.255.255.240 {
+ range 10.0.4.70 10.0.4.78;
+ option routers 10.0.4.65;
+ option broadcast-address 10.0.4.79;
+}
+EOF
+dhcpd -t -cf /etc/dhcp/dhcpd.conf
+dhcpd -4 -cf /etc/dhcp/dhcpd.conf -lf /var/lib/dhcp/dhcpd.leases eth1
+netstat -lnup 2>/dev/null | grep ':67'
+
+==============================================================================
+21. DNS BIND - qns.com.do
+==============================================================================
+mkdir -p /var/bind/master
+cat > /var/bind/master/db.qns.com.do <<'EOF'
+$TTL 86400
+@ IN SOA dns.qns.com.do. admin.qns.com.do. (
+ 2026080601 3600 1800 604800 86400 )
+@          IN NS   dns.qns.com.do.
+@          IN MX 10 mail.qns.com.do.
+dns        IN A    10.0.4.34
+www        IN A    10.0.4.34
+mail       IN A    10.0.4.34
+admin      IN A    10.0.4.34
+gw-ventas  IN A    10.0.4.1
+gw-cd      IN A    10.0.4.33
+gw-admin   IN A    10.0.4.65
+sw6        IN A    10.0.4.81
+sw9        IN A    10.0.4.82
+r-stgo     IN A    10.0.4.97
+EOF
+chown -R named:named /var/bind
+chmod 640 /var/bind/master/db.qns.com.do
+named-checkconf
+named-checkzone qns.com.do /var/bind/master/db.qns.com.do
+getent hosts www.qns.com.do
+netstat -lnup 2>/dev/null | grep ':53'
+
+==============================================================================
+22. WEB NGINX
+==============================================================================
+mkdir -p /var/www/qns
+cat > /var/www/qns/index.html <<'EOF'
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="UTF-8"><title>Quisqueya Network Solutions</title></head>
+<body><h1>Quisqueya Network Solutions</h1></body>
+</html>
+EOF
+
+cat > /etc/nginx/conf.d/qns.conf <<'EOF'
+server {
+ listen 80;
+ server_name www.qns.com.do qns.com.do;
+ root /var/www/qns;
+ index index.html;
+ location / { try_files $uri $uri/ =404; }
+}
+EOF
+nginx -t
+nginx -s reload 2>/dev/null || true
+wget -qO- http://www.qns.com.do/ | grep -i '<title>' | head -1
+
+==============================================================================
+23. FREERADIUS
+==============================================================================
+cat >> /etc/raddb/clients.conf <<'EOF'
+client red-qns {
+ ipaddr = 10.0.0.0/8
+ secret = QNS-RADIUS-2026!
+ shortname = QNS-NETWORK
+ nas_type = cisco
+}
+EOF
+
+cat >> /etc/raddb/mods-config/files/authorize <<'EOF'
+qnsadmin Cleartext-Password := "QNS-Admin-2026!"
+ Service-Type = Administrative-User
+
+soporte-red Cleartext-Password := "QNS-Soporte-2026!"
+ Service-Type = Login-User
+EOF
+
+radiusd -XC
+supervisorctl -c /etc/supervisor/supervisord.conf -u zbx -p password restart radius
+supervisorctl -c /etc/supervisor/supervisord.conf -u zbx -p password status radius
+netstat -lnup 2>/dev/null | grep -E ':1812|:1813'
+radtest qnsadmin 'QNS-Admin-2026!' 10.0.4.34 0 'QNS-RADIUS-2026!'
+radtest soporte-red 'QNS-Soporte-2026!' 10.0.4.34 0 'QNS-RADIUS-2026!'
+
+==============================================================================
+24. NFS
+==============================================================================
+mkdir -p /srv/nfs/qns
+chmod 777 /srv/nfs/qns
+cat > /etc/exports <<'EOF'
+/srv/nfs/qns 10.0.0.0/8(rw,sync,no_subtree_check)
+EOF
+exportfs -ra
+exportfs -v
+showmount -e 10.0.4.34
+mkdir -p /mnt/qns_prueba
+mount -t nfs 10.0.4.34:/srv/nfs/qns /mnt/qns_prueba
+mount | grep qns_prueba
+echo "Prueba final NFS - Quisqueya Network Solutions" > /mnt/qns_prueba/verificacion-nfs-qns.txt
+cat /mnt/qns_prueba/verificacion-nfs-qns.txt
+cat /srv/nfs/qns/verificacion-nfs-qns.txt
+
+==============================================================================
+25. CORREO POSTFIX + DOVECOT
+==============================================================================
+postconf -e 'myhostname = mail.qns.com.do'
+postconf -e 'mydomain = qns.com.do'
+postconf -e 'myorigin = $mydomain'
+postconf -e 'inet_interfaces = all'
+postconf -e 'mydestination = $myhostname, localhost.$mydomain, localhost, $mydomain'
+postconf -e 'home_mailbox = Maildir/'
+
+mkdir -p /etc/dovecot/conf.d
+cat > /etc/dovecot/conf.d/99-qns.conf <<'EOF'
+protocols = imap
+mail_location = maildir:~/Maildir
+disable_plaintext_auth = no
+auth_mechanisms = plain login
+EOF
+
+id soporte >/dev/null 2>&1 || adduser -D soporte
+id administracion >/dev/null 2>&1 || adduser -D administracion
+mkdir -p /home/soporte/Maildir/{cur,new,tmp}
+mkdir -p /home/administracion/Maildir/{cur,new,tmp}
+chown -R soporte:soporte /home/soporte/Maildir
+chown -R administracion:administracion /home/administracion/Maildir
+
+netstat -lntp 2>/dev/null | grep -E ':25|:143'
+printf 'From: administracion@qns.com.do\nTo: soporte@qns.com.do\nSubject: Prueba SMTP QNS\n\nMensaje de prueba QNS.\n' | sendmail soporte@qns.com.do
+find /home/soporte/Maildir/new -type f -maxdepth 1 -print
+
+==============================================================================
+26. FTP VSFTPD
+==============================================================================
+mkdir -p /srv/ftp/qns/subidas
+id archivos >/dev/null 2>&1 || adduser -D -h /srv/ftp/qns archivos
+chown -R archivos:archivos /srv/ftp/qns/subidas
+netstat -lntp 2>/dev/null | grep ':21'
+echo "Prueba FTP QNS" > /tmp/prueba-ftp.txt
+lftp -u archivos localhost -e "cd subidas; put /tmp/prueba-ftp.txt; bye"
+cat /srv/ftp/qns/subidas/prueba-ftp.txt
+
+==============================================================================
+27. ZABBIX
+==============================================================================
+netstat -lntp 2>/dev/null | grep -E ':10051|:80|:443'
+ps aux | grep '[z]abbix_server'
+wget -S -O /dev/null http://127.0.0.1/zabbix/ 2>&1 | head -20
+# URL cliente: http://10.0.4.34/zabbix/
+
+==============================================================================
+28. ESTADO GENERAL DE SERVICIOS
+==============================================================================
+supervisorctl -c /etc/supervisor/supervisord.conf -u zbx -p password status
+
+# Servicios validados:
+# dhcpd, dovecot, mysqld, named, nfs, nginx, php-fpm7, postfix,
+# radius, rpcbind_nfs, vsftpd, zabbix_java_gateway, zabbix_server
+
+==============================================================================
+29. PNETLAB HOST - CLOUD NAT
+==============================================================================
+# Bloque de soporte para restaurar salida a Internet del Cloud NAT
+ip link set pnet_nat up
+sysctl -w net.ipv4.ip_forward=1
+ip addr add 10.0.137.1/24 dev pnet_nat 2>/dev/null || true
+ip addr show pnet_nat
+ip route
+iptables -t nat -L POSTROUTING -n -v
+ps aux | grep '[d]nsmasq'
+
+# Red Cloud NAT: 10.0.137.0/24
+# Gateway: 10.0.137.1
+# ISP Ethernet1/2 obtuvo 10.0.137.87/24 por DHCP durante la validación.
+
+==============================================================================
+30. PRUEBAS FINALES EN CLIENTES
+==============================================================================
+# VPCS
+ip dhcp
+show ip
+show arp
+ping 10.0.4.34
+ping 8.8.8.8
+ping www.qns.com.do
+
+# Linux
+sudo dhclient -r eth1
+sudo dhclient -v eth1
+ip -4 addr show eth1
+ip route
+ping -c 3 10.0.4.33
+ping -c 3 10.0.4.34
+ping -c 3 8.8.8.8
+ping -c 3 www.qns.com.do
+
+# Servicios desde PC-STGO-CD
+timeout 3 bash -c 'echo > /dev/tcp/10.0.4.34/21'; if [ $? -eq 0 ]; then echo "FTP TCP 21: OK"; else echo "FTP TCP 21: FALLO"; fi
+timeout 3 bash -c 'echo > /dev/tcp/10.0.4.34/25'; if [ $? -eq 0 ]; then echo "SMTP TCP 25: OK"; else echo "SMTP TCP 25: FALLO"; fi
+timeout 3 bash -c 'echo > /dev/tcp/10.0.4.34/143'; if [ $? -eq 0 ]; then echo "IMAP TCP 143: OK"; else echo "IMAP TCP 143: FALLO"; fi
+timeout 3 bash -c 'echo > /dev/tcp/10.0.4.34/80'; if [ $? -eq 0 ]; then echo "WEB TCP 80: OK"; else echo "WEB TCP 80: FALLO"; fi
+
+==============================================================================
+31. CHECKLIST DE COMANDOS SHOW
+==============================================================================
+show ip interface brief
+show ip route
+show ip protocols
+show ip ospf neighbor
+show ip route ospf
+show standby brief
+show etherchannel summary
+show interfaces trunk
+show spanning-tree root
+show spanning-tree blockedports
+show port-security
+show ip dhcp snooping
+show ip dhcp snooping binding
+show ip arp inspection
+show ip dhcp binding
+show ip dhcp pool
+show ip dhcp conflict
+show access-lists
+show ip nat statistics
+show ip nat translations
+show crypto isakmp sa
+show crypto ipsec sa
+show ip ssh
+show users
+
+# Servidor
+ip -4 addr show eth1
+ip route
+supervisorctl -c /etc/supervisor/supervisord.conf -u zbx -p password status
+getent hosts www.qns.com.do
+showmount -e 10.0.4.34
+netstat -lntup 2>/dev/null | grep -E ':21|:25|:53|:67|:80|:143|:1812|:1813|:10051'
+
+==============================================================================
+FIN DEL ARCHIVO QNS - TI-203
+==============================================================================
